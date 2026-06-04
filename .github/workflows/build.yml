@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+
+      - name: Create Flutter scaffold
+        run: flutter create --org com.guitartuner --project-name guitar_tuner /tmp/guitar_tuner
+
+      - name: Copy source files
+        run: |
+          cp -r lib/* /tmp/guitar_tuner/lib/
+          cp pubspec.yaml /tmp/guitar_tuner/pubspec.yaml
+
+      - name: Add RECORD_AUDIO permission
+        run: |
+          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application|' \
+            /tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml
+
+      - name: Set minSdkVersion 21
+        run: |
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' \
+            /tmp/guitar_tuner/android/app/build.gradle
+
+      - name: Flutter pub get
+        working-directory: /tmp/guitar_tuner
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: /tmp/guitar_tuner
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: guitar-tuner-apk
+          path: /tmp/guitar_tuner/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
