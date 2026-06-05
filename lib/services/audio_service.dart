@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:record/record.dart';
+import 'package:mic_stream/mic_stream.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'pitch_detector.dart';
 
 class AudioService {
-  final AudioRecorder _recorder = AudioRecorder();
   final PitchDetector _detector = PitchDetector();
   final StreamController<double?> _pitchController =
       StreamController<double?>.broadcast();
@@ -20,16 +19,19 @@ class AudioService {
     final status = await Permission.microphone.request();
     if (!status.isGranted) return false;
 
-    final stream = await _recorder.startStream(
-      const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 44100,
-        numChannels: 1,
-      ),
+    final micStream = await MicStream.microphone(
+      sampleRate: 44100,
+      audioFormat: AudioFormat.ENCODING_PCM_16BIT,
+      channelConfig: ChannelConfig.CHANNEL_IN_MONO,
     );
 
-    _audioSub = stream.listen((bytes) {
-      final freq = _detector.feed(Uint8List.fromList(bytes));
+    if (micStream == null) return false;
+
+    _audioSub = micStream.listen((rawData) {
+      final bytes = rawData is Uint8List
+          ? rawData
+          : Uint8List.fromList(rawData.cast<int>());
+      final freq = _detector.feed(bytes);
       if (!_pitchController.isClosed) {
         _pitchController.add(freq);
       }
@@ -42,7 +44,7 @@ class AudioService {
   Future<void> stop() async {
     if (!_isRunning) return;
     await _audioSub?.cancel();
-    await _recorder.stop();
+    await MicStream.destroy();
     _isRunning = false;
   }
 

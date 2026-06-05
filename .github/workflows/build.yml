@@ -39,28 +39,32 @@ jobs:
           python3 - <<'PYEOF'
           import re, pathlib
 
+          # AndroidManifest — RECORD_AUDIO + MODIFY_AUDIO_SETTINGS
           manifest_path = pathlib.Path('/tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml')
           manifest = manifest_path.read_text()
           if 'RECORD_AUDIO' not in manifest:
-              manifest = manifest.replace(
-                  '<application',
-                  '<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application'
+              perms = (
+                  '<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n'
+                  '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n'
+                  '    '
               )
+              manifest = manifest.replace('<application', perms + '<application')
               manifest_path.write_text(manifest)
+          print("Manifest OK")
 
+          # build.gradle — minSdk 21, remove ndkVersion
           gradle_path = pathlib.Path('/tmp/guitar_tuner/android/app/build.gradle')
           g = gradle_path.read_text()
           g = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 21', g)
           g = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 21', g)
           g = re.sub(r'minSdk\s+flutter\.minSdkVersion', 'minSdk 21', g)
-          g = re.sub(r'\s*ndkVersion\s+flutter\.ndkVersion', '', g)
-          g = g.replace(
-              'versionName flutterVersionName',
-              'versionName flutterVersionName\n        multiDexEnabled true'
-          )
+          g = re.sub(r'[ \t]*ndkVersion[^\n]*\n', '', g)
           gradle_path.write_text(g)
-          print("build.gradle after patch:")
-          print(gradle_path.read_text())
+
+          # Print key lines for debugging
+          for line in gradle_path.read_text().splitlines():
+              if any(k in line for k in ['minSdk', 'ndk', 'compileSdk', 'targetSdk', 'applicationId']):
+                  print(line)
           PYEOF
 
       - name: Flutter pub get
@@ -69,27 +73,23 @@ jobs:
 
       - name: Analyze Dart code
         working-directory: /tmp/guitar_tuner
-        run: flutter analyze --no-fatal-infos || true
+        run: flutter analyze --no-fatal-infos
 
-      - name: Build debug APK (verbose)
+      - name: Build debug APK
         working-directory: /tmp/guitar_tuner
-        run: flutter build apk --debug --verbose 2>&1 | tail -200
-        continue-on-error: true
-
-      - name: Check if APK exists
-        id: apk_check
         run: |
-          if [ -f /tmp/guitar_tuner/build/app/outputs/flutter-apk/app-debug.apk ]; then
-            echo "found=true" >> $GITHUB_OUTPUT
-            echo "APK built successfully!"
-          else
-            echo "found=false" >> $GITHUB_OUTPUT
-            echo "APK NOT found — build failed"
-            exit 1
+          flutter build apk --debug 2>&1 | tee /tmp/build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "======= GRADLE FAILURE DETAILS ======="
+            grep -A5 "FAILURE\|What went wrong\|error:" /tmp/build.log | head -60
+            exit $BUILD_STATUS
           fi
 
+      - name: Find and list APK
+        run: find /tmp/guitar_tuner/build -name "*.apk" 2>/dev/null
+
       - name: Upload APK artifact
-        if: steps.apk_check.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: guitar-tuner-apk
