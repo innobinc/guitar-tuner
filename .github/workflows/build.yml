@@ -78,17 +78,25 @@ jobs:
 
       - name: Patch record_android plugin (flutter.xxx not available in new Gradle)
         run: |
-          find ~/.pub-cache -name "build.gradle" -path "*/record_android*" | while read f; do
-            echo "Patching $f"
-            sed -i \
-              -e 's/compileSdkVersion flutter\.compileSdkVersion/compileSdkVersion 35/' \
-              -e 's/compileSdk flutter\.compileSdkVersion/compileSdk 35/' \
-              -e 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 21/' \
-              -e 's/minSdk flutter\.minSdkVersion/minSdk 21/' \
-              -e 's/targetSdkVersion flutter\.targetSdkVersion/targetSdkVersion 35/' \
-              -e 's/targetSdk flutter\.targetSdkVersion/targetSdk 35/' \
-              "$f"
-          done
+          python3 - <<'PYEOF'
+          import pathlib, glob, re, os
+
+          pattern = os.path.expanduser('~/.pub-cache/hosted/pub.dev/record_android*/android/build.gradle')
+          files = glob.glob(pattern)
+          print(f"Found {len(files)} file(s): {files}")
+
+          for f in files:
+              content = pathlib.Path(f).read_text()
+              print(f"\n=== ORIGINAL: {f} ===\n{content}\n")
+
+              content = re.sub(r'flutter\.compileSdkVersion', '35', content)
+              content = re.sub(r'flutter\.minSdkVersion', '21', content)
+              content = re.sub(r'flutter\.targetSdkVersion', '35', content)
+              content = re.sub(r'flutter\.ndkVersion', '"27.0.12077973"', content)
+
+              print(f"=== PATCHED ===\n{content}\n")
+              pathlib.Path(f).write_text(content)
+          PYEOF
 
       - name: Analyze Dart code
         working-directory: /tmp/guitar_tuner
