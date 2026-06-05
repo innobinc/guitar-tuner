@@ -34,12 +34,11 @@ jobs:
           cp -r lib/* /tmp/guitar_tuner/lib/
           cp pubspec.yaml /tmp/guitar_tuner/pubspec.yaml
 
-      - name: Configure Android (manifest + build.gradle)
+      - name: Configure Android
         run: |
           python3 - <<'PYEOF'
           import re, pathlib
 
-          # ── AndroidManifest.xml ──────────────────────────────────────────
           manifest_path = pathlib.Path('/tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml')
           manifest = manifest_path.read_text()
           if 'RECORD_AUDIO' not in manifest:
@@ -48,46 +47,49 @@ jobs:
                   '<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application'
               )
               manifest_path.write_text(manifest)
-          print("Manifest OK")
 
-          # ── app/build.gradle ─────────────────────────────────────────────
           gradle_path = pathlib.Path('/tmp/guitar_tuner/android/app/build.gradle')
           g = gradle_path.read_text()
-          print("Original build.gradle snippet:")
-          for line in g.splitlines():
-              if 'minSdk' in line or 'ndk' in line.lower():
-                  print(" ", line)
-
-          # Set minSdk to 21 (handles all Flutter template variants)
           g = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 21', g)
           g = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 21', g)
           g = re.sub(r'minSdk\s+flutter\.minSdkVersion', 'minSdk 21', g)
-
-          # Remove ndkVersion (not needed for pure-Dart plugins, avoids NDK download)
           g = re.sub(r'\s*ndkVersion\s+flutter\.ndkVersion', '', g)
-
-          # Enable multiDex (safe to add)
           g = g.replace(
               'versionName flutterVersionName',
               'versionName flutterVersionName\n        multiDexEnabled true'
           )
-
           gradle_path.write_text(g)
-          print("After patch:")
-          for line in gradle_path.read_text().splitlines():
-              if 'minSdk' in line or 'ndk' in line.lower() or 'multiDex' in line:
-                  print(" ", line)
+          print("build.gradle after patch:")
+          print(gradle_path.read_text())
           PYEOF
 
       - name: Flutter pub get
         working-directory: /tmp/guitar_tuner
         run: flutter pub get
 
-      - name: Build debug APK
+      - name: Analyze Dart code
         working-directory: /tmp/guitar_tuner
-        run: flutter build apk --debug
+        run: flutter analyze --no-fatal-infos || true
+
+      - name: Build debug APK (verbose)
+        working-directory: /tmp/guitar_tuner
+        run: flutter build apk --debug --verbose 2>&1 | tail -200
+        continue-on-error: true
+
+      - name: Check if APK exists
+        id: apk_check
+        run: |
+          if [ -f /tmp/guitar_tuner/build/app/outputs/flutter-apk/app-debug.apk ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "APK built successfully!"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "APK NOT found — build failed"
+            exit 1
+          fi
 
       - name: Upload APK artifact
+        if: steps.apk_check.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: guitar-tuner-apk
