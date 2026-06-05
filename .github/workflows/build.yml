@@ -59,11 +59,16 @@ jobs:
           g = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 21', g)
           g = re.sub(r'minSdk\s+flutter\.minSdkVersion', 'minSdk 21', g)
           g = re.sub(r'[ \t]*ndkVersion[^\n]*\n', '', g)
+          # Upgrade Java 1.8 → 11 (needed by record package's Kotlin code)
+          g = g.replace('sourceCompatibility JavaVersion.VERSION_1_8', 'sourceCompatibility JavaVersion.VERSION_11')
+          g = g.replace('targetCompatibility JavaVersion.VERSION_1_8', 'targetCompatibility JavaVersion.VERSION_11')
+          g = g.replace("jvmTarget = '1.8'", "jvmTarget = '11'")
+
           gradle_path.write_text(g)
 
           # Print key lines for debugging
           for line in gradle_path.read_text().splitlines():
-              if any(k in line for k in ['minSdk', 'ndk', 'compileSdk', 'targetSdk', 'applicationId']):
+              if any(k in line for k in ['minSdk', 'ndk', 'compileSdk', 'targetSdk', 'jvmTarget', 'VERSION_']):
                   print(line)
           PYEOF
 
