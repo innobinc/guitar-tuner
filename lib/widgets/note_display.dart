@@ -67,9 +67,11 @@ class NoteDisplay extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.15),
+            color: Color.fromARGB(38, statusColor.red, statusColor.green, statusColor.blue),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: statusColor.withOpacity(0.4)),
+            border: Border.all(
+              color: Color.fromARGB(102, statusColor.red, statusColor.green, statusColor.blue),
+            ),
           ),
           child: Text(
             statusText,

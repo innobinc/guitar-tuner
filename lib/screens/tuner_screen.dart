@@ -124,8 +124,8 @@ class _TunerScreenState extends State<TunerScreen> {
                   ),
                   boxShadow: _listening
                       ? [
-                          BoxShadow(
-                            color: const Color(0xFF66BB6A).withOpacity(0.35),
+                          const BoxShadow(
+                            color: Color(0x5966BB6A),
                             blurRadius: 20,
                             spreadRadius: 4,
                           )

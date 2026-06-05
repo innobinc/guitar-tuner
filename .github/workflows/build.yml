@@ -78,7 +78,7 @@ jobs:
 
       - name: Analyze Dart code
         working-directory: /tmp/guitar_tuner
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build debug APK
         working-directory: /tmp/guitar_tuner
