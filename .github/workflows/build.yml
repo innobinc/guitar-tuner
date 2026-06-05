@@ -39,9 +39,12 @@ jobs:
           sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application|' \
             /tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml
 
-      - name: Set minSdkVersion 21
+      - name: Set minSdk 21 (handles both old and new Gradle format)
         run: |
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' \
+          sed -i \
+            -e 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 21/' \
+            -e 's/minSdk = flutter\.minSdkVersion/minSdk = 21/' \
+            -e 's/minSdk flutter\.minSdkVersion/minSdk 21/' \
             /tmp/guitar_tuner/android/app/build.gradle
 
       - name: Flutter pub get
