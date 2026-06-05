@@ -76,6 +76,20 @@ jobs:
         working-directory: /tmp/guitar_tuner
         run: flutter pub get
 
+      - name: Patch record_android plugin (flutter.xxx not available in new Gradle)
+        run: |
+          find ~/.pub-cache -name "build.gradle" -path "*/record_android*" | while read f; do
+            echo "Patching $f"
+            sed -i \
+              -e 's/compileSdkVersion flutter\.compileSdkVersion/compileSdkVersion 35/' \
+              -e 's/compileSdk flutter\.compileSdkVersion/compileSdk 35/' \
+              -e 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 21/' \
+              -e 's/minSdk flutter\.minSdkVersion/minSdk 21/' \
+              -e 's/targetSdkVersion flutter\.targetSdkVersion/targetSdkVersion 35/' \
+              -e 's/targetSdk flutter\.targetSdkVersion/targetSdk 35/' \
+              "$f"
+          done
+
       - name: Analyze Dart code
         working-directory: /tmp/guitar_tuner
         run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
