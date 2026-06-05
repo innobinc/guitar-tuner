@@ -16,29 +16,41 @@ class AudioService {
 
   Future<bool> start() async {
     if (_isRunning) return true;
+
     final status = await Permission.microphone.request();
     if (!status.isGranted) return false;
 
-    _audioSub = _channel.receiveBroadcastStream().listen((dynamic data) {
-      final Uint8List bytes;
-      if (data is Uint8List) {
-        bytes = data;
-      } else if (data is List) {
-        bytes = Uint8List.fromList(data.cast<int>());
-      } else {
-        return;
-      }
-      final freq = _detector.feed(bytes);
-      if (!_pitchController.isClosed) _pitchController.add(freq);
-    });
-
-    _isRunning = true;
-    return true;
+    try {
+      _audioSub = _channel.receiveBroadcastStream().listen(
+        (dynamic data) {
+          final Uint8List bytes;
+          if (data is Uint8List) {
+            bytes = data;
+          } else if (data is List) {
+            bytes = Uint8List.fromList(data.cast<int>());
+          } else {
+            return;
+          }
+          final freq = _detector.feed(bytes);
+          if (!_pitchController.isClosed) _pitchController.add(freq);
+        },
+        onError: (error) {
+          // Native error — stop gracefully
+          _isRunning = false;
+        },
+        cancelOnError: true,
+      );
+      _isRunning = true;
+      return true;
+    } on PlatformException {
+      return false;
+    }
   }
 
   Future<void> stop() async {
     if (!_isRunning) return;
     await _audioSub?.cancel();
+    _audioSub = null;
     _isRunning = false;
   }
 
