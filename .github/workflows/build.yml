@@ -34,129 +34,14 @@ jobs:
           cp -r lib/* /tmp/guitar_tuner/lib/
           cp pubspec.yaml /tmp/guitar_tuner/pubspec.yaml
 
-      - name: Configure Android + inject native audio plugin
+      - name: Configure Android
+        run: python3 scripts/configure_android.py
+
+      - name: Inject native audio plugin
         run: |
-          python3 - <<'PYEOF'
-          import re, pathlib
-
-          # ── AndroidManifest ──────────────────────────────────────────────
-          manifest_path = pathlib.Path('/tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml')
-          manifest = manifest_path.read_text()
-          if 'RECORD_AUDIO' not in manifest:
-              manifest = manifest.replace(
-                  '<application',
-                  '<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application'
-              )
-              manifest_path.write_text(manifest)
-
-          # ── build.gradle ─────────────────────────────────────────────────
-          gradle_path = pathlib.Path('/tmp/guitar_tuner/android/app/build.gradle')
-          g = gradle_path.read_text()
-          g = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 21', g)
-          g = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 21', g)
-          g = re.sub(r'minSdk\s+flutter\.minSdkVersion', 'minSdk 21', g)
-          g = re.sub(r'[ \t]*ndkVersion[^\n]*\n', '', g)
-          g = g.replace('sourceCompatibility JavaVersion.VERSION_1_8', 'sourceCompatibility JavaVersion.VERSION_11')
-          g = g.replace('targetCompatibility JavaVersion.VERSION_1_8', 'targetCompatibility JavaVersion.VERSION_11')
-          g = g.replace("jvmTarget = '1.8'", "jvmTarget = '11'")
-          gradle_path.write_text(g)
-
-          # ── AudioRecordPlugin.kt ─────────────────────────────────────────
-          kotlin_dir = pathlib.Path('/tmp/guitar_tuner/android/app/src/main/kotlin/com/guitartuner/guitar_tuner')
-          kotlin_dir.mkdir(parents=True, exist_ok=True)
-
-          (kotlin_dir / 'AudioRecordPlugin.kt').write_text('''package com.guitartuner.guitar_tuner
-
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
-import io.flutter.embedding.engine.plugins.FlutterPlugin
-import io.flutter.plugin.common.EventChannel
-import kotlin.concurrent.thread
-
-class AudioRecordPlugin : FlutterPlugin, EventChannel.StreamHandler {
-    private val CHANNEL_NAME = "com.guitartuner.guitar_tuner/audio"
-    private var eventChannel: EventChannel? = null
-    private var audioRecord: AudioRecord? = null
-    private var recordingThread: Thread? = null
-    @Volatile private var isRecording = false
-
-    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        eventChannel = EventChannel(binding.binaryMessenger, CHANNEL_NAME)
-        eventChannel?.setStreamHandler(this)
-    }
-
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        stopRecording()
-        eventChannel?.setStreamHandler(null)
-        eventChannel = null
-    }
-
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        val sampleRate = 44100
-        val minBuf = AudioRecord.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-        val bufSize = maxOf(minBuf * 4, 8192)
-
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufSize
-        )
-
-        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-            events?.error("INIT_ERROR", "AudioRecord init failed", null)
-            return
-        }
-
-        audioRecord?.startRecording()
-        isRecording = true
-
-        recordingThread = thread(name = "AudioCapture") {
-            val buffer = ByteArray(bufSize)
-            while (isRecording) {
-                val read = audioRecord?.read(buffer, 0, bufSize) ?: -1
-                if (read > 0) {
-                    events?.success(buffer.copyOf(read))
-                }
-            }
-        }
-    }
-
-    override fun onCancel(arguments: Any?) = stopRecording()
-
-    private fun stopRecording() {
-        isRecording = false
-        recordingThread?.join(200)
-        recordingThread = null
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
-    }
-}
-''')
-
-          # ── MainActivity.kt — register plugin ────────────────────────────
-          main_kt = kotlin_dir / 'MainActivity.kt'
-          main_kt.write_text('''package com.guitartuner.guitar_tuner
-
-import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-
-class MainActivity : FlutterActivity() {
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
-        flutterEngine.plugins.add(AudioRecordPlugin())
-    }
-}
-''')
-          print("All files configured.")
-          PYEOF
+          KDIR=/tmp/guitar_tuner/android/app/src/main/kotlin/com/guitartuner/guitar_tuner
+          cp android_src/AudioRecordPlugin.kt $KDIR/
+          cp android_src/MainActivity.kt $KDIR/
 
       - name: Flutter pub get
         working-directory: /tmp/guitar_tuner
@@ -172,15 +57,12 @@ class MainActivity : FlutterActivity() {
           flutter build apk --debug 2>&1 | tee /tmp/build.log
           BUILD_STATUS=${PIPESTATUS[0]}
           if [ $BUILD_STATUS -ne 0 ]; then
-            echo "======= GRADLE FAILURE DETAILS ======="
+            echo "======= BUILD ERROR ======="
             grep -A5 "FAILURE\|What went wrong\|error:" /tmp/build.log | head -80
             exit $BUILD_STATUS
           fi
 
-      - name: Find APK
-        run: find /tmp/guitar_tuner/build -name "*.apk" 2>/dev/null
-
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: guitar-tuner-apk
