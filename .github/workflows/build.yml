@@ -34,30 +34,62 @@ jobs:
           cp -r lib/* /tmp/guitar_tuner/lib/
           cp pubspec.yaml /tmp/guitar_tuner/pubspec.yaml
 
-      - name: Add RECORD_AUDIO permission
+      - name: Configure Android (manifest + build.gradle)
         run: |
-          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application|' \
-            /tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml
+          python3 - <<'PYEOF'
+          import re, pathlib
 
-      - name: Set minSdk 21 (handles both old and new Gradle format)
-        run: |
-          sed -i \
-            -e 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 21/' \
-            -e 's/minSdk = flutter\.minSdkVersion/minSdk = 21/' \
-            -e 's/minSdk flutter\.minSdkVersion/minSdk 21/' \
-            /tmp/guitar_tuner/android/app/build.gradle
+          # ── AndroidManifest.xml ──────────────────────────────────────────
+          manifest_path = pathlib.Path('/tmp/guitar_tuner/android/app/src/main/AndroidManifest.xml')
+          manifest = manifest_path.read_text()
+          if 'RECORD_AUDIO' not in manifest:
+              manifest = manifest.replace(
+                  '<application',
+                  '<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application'
+              )
+              manifest_path.write_text(manifest)
+          print("Manifest OK")
+
+          # ── app/build.gradle ─────────────────────────────────────────────
+          gradle_path = pathlib.Path('/tmp/guitar_tuner/android/app/build.gradle')
+          g = gradle_path.read_text()
+          print("Original build.gradle snippet:")
+          for line in g.splitlines():
+              if 'minSdk' in line or 'ndk' in line.lower():
+                  print(" ", line)
+
+          # Set minSdk to 21 (handles all Flutter template variants)
+          g = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 21', g)
+          g = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 21', g)
+          g = re.sub(r'minSdk\s+flutter\.minSdkVersion', 'minSdk 21', g)
+
+          # Remove ndkVersion (not needed for pure-Dart plugins, avoids NDK download)
+          g = re.sub(r'\s*ndkVersion\s+flutter\.ndkVersion', '', g)
+
+          # Enable multiDex (safe to add)
+          g = g.replace(
+              'versionName flutterVersionName',
+              'versionName flutterVersionName\n        multiDexEnabled true'
+          )
+
+          gradle_path.write_text(g)
+          print("After patch:")
+          for line in gradle_path.read_text().splitlines():
+              if 'minSdk' in line or 'ndk' in line.lower() or 'multiDex' in line:
+                  print(" ", line)
+          PYEOF
 
       - name: Flutter pub get
         working-directory: /tmp/guitar_tuner
         run: flutter pub get
 
-      - name: Build release APK
+      - name: Build debug APK
         working-directory: /tmp/guitar_tuner
-        run: flutter build apk --release
+        run: flutter build apk --debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: guitar-tuner-apk
-          path: /tmp/guitar_tuner/build/app/outputs/flutter-apk/app-release.apk
+          path: /tmp/guitar_tuner/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
