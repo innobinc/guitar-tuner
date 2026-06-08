@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:flutter/services.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'pitch_detector.dart';
 
 class AudioService {
-  static const _channel = EventChannel('com.guitartuner.guitar_tuner/audio');
+  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   final PitchDetector _detector = PitchDetector();
   final StreamController<double?> _pitchController =
       StreamController<double?>.broadcast();
   final StreamController<double> _signalController =
       StreamController<double>.broadcast();
-  StreamSubscription? _audioSub;
+  StreamController<Food>? _foodController;
+  StreamSubscription? _foodSub;
   bool _isRunning = false;
   String? _lastError;
 
@@ -30,51 +31,58 @@ class AudioService {
     }
 
     try {
-      _audioSub = _channel.receiveBroadcastStream().listen(
-        (dynamic data) {
-          final Uint8List bytes;
-          if (data is Uint8List) {
-            bytes = data;
-          } else if (data is List) {
-            bytes = Uint8List.fromList(data.cast<int>());
-          } else {
-            return;
-          }
+      await _recorder.openRecorder();
 
-          // Compute RMS for signal level indicator
+      _foodController = StreamController<Food>();
+      _foodSub = _foodController!.stream.listen((food) {
+        if (food is FoodData && food.data != null) {
+          final bytes = Uint8List.fromList(food.data!);
+
+          // Signal level (RMS)
           final samples = Int16List.view(bytes.buffer);
           double sum = 0;
           for (final s in samples) {
-            final norm = s / 32768.0;
-            sum += norm * norm;
+            final n = s / 32768.0;
+            sum += n * n;
           }
           final rms = sqrt(sum / samples.length);
           if (!_signalController.isClosed) _signalController.add(rms);
 
-          // Pitch detection
+          // Pitch
           final freq = _detector.feed(bytes);
           if (!_pitchController.isClosed) _pitchController.add(freq);
-        },
-        onError: (error) {
-          _lastError = 'Native error: $error';
-          _isRunning = false;
-          if (!_signalController.isClosed) _signalController.add(-1.0); // -1 = error signal
-        },
-        cancelOnError: true,
+        }
+      });
+
+      await _recorder.startRecorderToStream(
+        _foodController!.sink,
+        codec: Codec.pcm16,
+        sampleRate: 44100,
+        numChannels: 1,
       );
+
       _isRunning = true;
       return true;
-    } on PlatformException catch (e) {
-      _lastError = e.message;
+    } catch (e) {
+      _lastError = e.toString();
+      await _cleanup();
       return false;
     }
   }
 
   Future<void> stop() async {
     if (!_isRunning) return;
-    await _audioSub?.cancel();
-    _audioSub = null;
+    try { await _recorder.stopRecorder(); } catch (_) {}
+    await _cleanup();
     _isRunning = false;
+  }
+
+  Future<void> _cleanup() async {
+    await _foodSub?.cancel();
+    _foodSub = null;
+    await _foodController?.close();
+    _foodController = null;
+    try { await _recorder.closeRecorder(); } catch (_) {}
   }
 
   void dispose() {

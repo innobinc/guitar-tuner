@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_sound: ^9.0.0
   permission_handler: ^11.3.0
 
 dev_dependencies:

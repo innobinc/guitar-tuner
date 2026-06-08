@@ -34,17 +34,12 @@ jobs:
           cp -r lib/* /tmp/guitar_tuner/lib/
           cp pubspec.yaml /tmp/guitar_tuner/pubspec.yaml
 
-      - name: Configure Android
-        run: python3 scripts/configure_android.py
-
-      - name: Inject MainActivity
-        run: |
-          KDIR=/tmp/guitar_tuner/android/app/src/main/kotlin/com/guitartuner/guitar_tuner
-          cp android_src/MainActivity.kt $KDIR/MainActivity.kt
-
       - name: Flutter pub get
         working-directory: /tmp/guitar_tuner
         run: flutter pub get
+
+      - name: Patch Android configs and all plugin Gradle files
+        run: python3 scripts/configure_android.py
 
       - name: Analyze Dart code
         working-directory: /tmp/guitar_tuner
