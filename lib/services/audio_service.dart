@@ -54,8 +54,8 @@ class AudioService {
         }
       });
 
-      await _recorder.startRecorderToStream(
-        _foodController!.sink,
+      await _recorder.startRecorder(
+        toStream: _foodController!.sink,
         codec: Codec.pcm16,
         sampleRate: 44100,
         numChannels: 1,
