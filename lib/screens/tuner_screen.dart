@@ -15,40 +15,50 @@ class TunerScreen extends StatefulWidget {
 
 class _TunerScreenState extends State<TunerScreen> {
   final AudioService _audio = AudioService();
-  StreamSubscription<double?>? _sub;
+  StreamSubscription<double?>? _pitchSub;
+  StreamSubscription<double>? _signalSub;
 
   bool _listening = false;
   GuitarNote? _note;
   double _cents = 0;
-  int? _selectedString; // null = auto
+  double _signalLevel = 0;
+  int? _selectedString;
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _pitchSub?.cancel();
+    _signalSub?.cancel();
     _audio.dispose();
     super.dispose();
   }
 
   Future<void> _toggleListening() async {
     if (_listening) {
-      await _sub?.cancel();
+      await _pitchSub?.cancel();
+      await _signalSub?.cancel();
       await _audio.stop();
       setState(() {
         _listening = false;
         _note = null;
         _cents = 0;
+        _signalLevel = 0;
       });
     } else {
       final ok = await _audio.start();
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Microphone permission denied')),
+            SnackBar(content: Text(_audio.lastError ?? 'Could not start mic')),
           );
         }
         return;
       }
-      _sub = _audio.pitchStream.listen((freq) {
+
+      _signalSub = _audio.signalStream.listen((rms) {
+        if (mounted) setState(() => _signalLevel = rms.clamp(0.0, 1.0));
+      });
+
+      _pitchSub = _audio.pitchStream.listen((freq) {
         if (freq == null) return;
         final (note, cents) =
             GuitarNote.nearest(freq, restrictToString: _selectedString);
@@ -59,6 +69,7 @@ class _TunerScreenState extends State<TunerScreen> {
           });
         }
       });
+
       setState(() => _listening = true);
     }
   }
@@ -69,7 +80,6 @@ class _TunerScreenState extends State<TunerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Row(
@@ -90,7 +100,6 @@ class _TunerScreenState extends State<TunerScreen> {
 
             const Spacer(flex: 2),
 
-            // Note display
             NoteDisplay(
               note: _note,
               cents: _cents,
@@ -99,12 +108,56 @@ class _TunerScreenState extends State<TunerScreen> {
 
             const SizedBox(height: 32),
 
-            // Tuner needle
             TunerNeedle(cents: _listening ? _cents : 0),
+
+            const SizedBox(height: 16),
+
+            // Signal level bar — shows raw audio is arriving
+            if (_listening)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Text('MIC',
+                            style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.white30,
+                                letterSpacing: 2)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: _signalLevel * 5,
+                              minHeight: 6,
+                              backgroundColor: Colors.white10,
+                              valueColor: AlwaysStoppedAnimation(
+                                _signalLevel > 0.01
+                                    ? const Color(0xFF66BB6A)
+                                    : Colors.white24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_signalLevel < 0.005 && _listening)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          'No signal — check mic permission',
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.orange),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
 
             const Spacer(flex: 1),
 
-            // Mic button
             GestureDetector(
               onTap: _toggleListening,
               child: AnimatedContainer(
@@ -142,7 +195,6 @@ class _TunerScreenState extends State<TunerScreen> {
 
             const SizedBox(height: 28),
 
-            // String selector
             StringSelector(
               selectedString: _selectedString,
               onSelect: (s) => setState(() => _selectedString = s),
