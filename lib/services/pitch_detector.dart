@@ -1,13 +1,13 @@
 import 'dart:typed_data';
 
 class PitchDetector {
-  static const double _threshold = 0.10;
-  static const int _bufferSize = 4096;
+  static const double _threshold = 0.15; // raised: real mics need more tolerance
+  static const int _bufferSize = 8192;   // doubled: better low-freq resolution
   static const int _sampleRate = 44100;
 
   final List<double> _accumulator = [];
 
-  // Feed raw PCM16 bytes; returns a frequency in Hz when a full buffer is ready, else null.
+  // Feed raw PCM16 bytes; returns frequency in Hz when buffer is ready, else null.
   double? feed(Uint8List bytes) {
     final samples = Int16List.sublistView(bytes);
     for (final s in samples) {
@@ -16,11 +16,17 @@ class PitchDetector {
     if (_accumulator.length < _bufferSize) return null;
 
     final buffer = _accumulator.sublist(0, _bufferSize);
-    _accumulator.removeRange(0, _bufferSize ~/ 2); // 50% overlap
+    _accumulator.removeRange(0, _bufferSize ~/ 2);
     return _yin(buffer);
   }
 
   double? _yin(List<double> buffer) {
+    // Check signal level — skip if too quiet
+    double rms = 0;
+    for (final s in buffer) rms += s * s;
+    rms = (rms / buffer.length).toDouble();
+    if (rms < 0.0001) return null;
+
     final half = buffer.length ~/ 2;
     final yin = List<double>.filled(half, 0.0);
 
@@ -37,10 +43,11 @@ class PitchDetector {
     double running = 0.0;
     for (int tau = 1; tau < half; tau++) {
       running += yin[tau];
+      if (running == 0) { yin[tau] = 1.0; continue; }
       yin[tau] *= tau / running;
     }
 
-    // Absolute threshold — find first dip below threshold
+    // Absolute threshold
     int tau = 2;
     while (tau < half) {
       if (yin[tau] < _threshold) {
@@ -54,7 +61,7 @@ class PitchDetector {
 
     if (tau >= half || yin[tau] >= _threshold) return null;
 
-    // Parabolic interpolation for sub-sample accuracy
+    // Parabolic interpolation
     double betterTau;
     if (tau > 0 && tau < half - 1) {
       final s0 = yin[tau - 1], s1 = yin[tau], s2 = yin[tau + 1];
@@ -63,10 +70,10 @@ class PitchDetector {
     } else {
       betterTau = tau.toDouble();
     }
+    if (betterTau <= 0) return null;
 
     final freq = _sampleRate / betterTau;
-    // Sanity check: guitar range ~70 Hz – 400 Hz
-    if (freq < 70 || freq > 400) return null;
+    if (freq < 60 || freq > 500) return null; // slightly wider guitar range
     return freq;
   }
 }
