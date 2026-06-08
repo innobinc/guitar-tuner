@@ -12,8 +12,8 @@ class AudioService {
       StreamController<double?>.broadcast();
   final StreamController<double> _signalController =
       StreamController<double>.broadcast();
-  StreamController<Food>? _foodController;
-  StreamSubscription? _foodSub;
+  StreamController<Uint8List>? _pcmController;
+  StreamSubscription? _pcmSub;
   bool _isRunning = false;
   String? _lastError;
 
@@ -33,29 +33,25 @@ class AudioService {
     try {
       await _recorder.openRecorder();
 
-      _foodController = StreamController<Food>();
-      _foodSub = _foodController!.stream.listen((food) {
-        if (food is FoodData && food.data != null) {
-          final bytes = Uint8List.fromList(food.data!);
-
-          // Signal level (RMS)
-          final samples = Int16List.view(bytes.buffer);
-          double sum = 0;
-          for (final s in samples) {
-            final n = s / 32768.0;
-            sum += n * n;
-          }
-          final rms = sqrt(sum / samples.length);
-          if (!_signalController.isClosed) _signalController.add(rms);
-
-          // Pitch
-          final freq = _detector.feed(bytes);
-          if (!_pitchController.isClosed) _pitchController.add(freq);
+      _pcmController = StreamController<Uint8List>();
+      _pcmSub = _pcmController!.stream.listen((bytes) {
+        // Signal level (RMS)
+        final samples = Int16List.view(bytes.buffer);
+        double sum = 0;
+        for (final s in samples) {
+          final n = s / 32768.0;
+          sum += n * n;
         }
+        final rms = sqrt(sum / samples.length);
+        if (!_signalController.isClosed) _signalController.add(rms);
+
+        // Pitch detection
+        final freq = _detector.feed(bytes);
+        if (!_pitchController.isClosed) _pitchController.add(freq);
       });
 
       await _recorder.startRecorder(
-        toStream: _foodController!.sink,
+        toStream: _pcmController!.sink,
         codec: Codec.pcm16,
         sampleRate: 44100,
         numChannels: 1,
@@ -78,10 +74,10 @@ class AudioService {
   }
 
   Future<void> _cleanup() async {
-    await _foodSub?.cancel();
-    _foodSub = null;
-    await _foodController?.close();
-    _foodController = null;
+    await _pcmSub?.cancel();
+    _pcmSub = null;
+    await _pcmController?.close();
+    _pcmController = null;
     try { await _recorder.closeRecorder(); } catch (_) {}
   }
 
