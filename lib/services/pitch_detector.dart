@@ -7,11 +7,15 @@ class PitchDetector {
 
   final List<double> _accumulator = [];
 
-  // Feed raw PCM16 bytes; returns frequency in Hz when buffer is ready, else null.
+  // Feed raw PCM16LE bytes; returns frequency in Hz when buffer is ready, else null.
+  // Uses ByteData (byte-addressable) instead of Int16List.sublistView because
+  // chunks from the platform stream can start at odd byte offsets, which
+  // Int16List.sublistView rejects with "Offset must be a multiple of BYTES_PER_ELEMENT".
   double? feed(Uint8List bytes) {
-    final samples = Int16List.sublistView(bytes);
-    for (final s in samples) {
-      _accumulator.add(s / 32768.0);
+    final bd = ByteData.sublistView(bytes);
+    final sampleCount = bd.lengthInBytes ~/ 2;
+    for (int i = 0; i < sampleCount; i++) {
+      _accumulator.add(bd.getInt16(i * 2, Endian.little) / 32768.0);
     }
     if (_accumulator.length < _bufferSize) return null;
 

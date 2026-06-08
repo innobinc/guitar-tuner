@@ -36,14 +36,16 @@ class AudioService {
       _pcmController = StreamController<Uint8List>();
       _pcmSub = _pcmController!.stream.listen((bytes) {
         try {
-          // Signal level (RMS)
-          final samples = Int16List.sublistView(bytes);
+          // Signal level (RMS) — use ByteData since chunks may start at odd
+          // byte offsets (Int16List.sublistView requires 2-byte alignment).
+          final bd = ByteData.sublistView(bytes);
+          final sampleCount = bd.lengthInBytes ~/ 2;
           double sum = 0;
-          for (final s in samples) {
-            final n = s / 32768.0;
+          for (int i = 0; i < sampleCount; i++) {
+            final n = bd.getInt16(i * 2, Endian.little) / 32768.0;
             sum += n * n;
           }
-          final rms = samples.isEmpty ? 0.0 : sqrt(sum / samples.length);
+          final rms = sampleCount == 0 ? 0.0 : sqrt(sum / sampleCount);
           if (!_signalController.isClosed) _signalController.add(rms);
 
           // Pitch detection
