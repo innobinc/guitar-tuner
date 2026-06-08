@@ -1,11 +1,11 @@
-import re
+﻿import re
 import glob
 import pathlib
 import os
 
 PROJECT = pathlib.Path("/tmp/guitar_tuner")
 
-# ── AndroidManifest ───────────────────────────────────────────────────────────
+# в”Ђв”Ђ AndroidManifest в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 manifest_path = PROJECT / "android/app/src/main/AndroidManifest.xml"
 manifest = manifest_path.read_text()
 if "RECORD_AUDIO" not in manifest:
@@ -16,14 +16,14 @@ if "RECORD_AUDIO" not in manifest:
     manifest_path.write_text(manifest)
 print("Manifest OK")
 
-# ── app/build.gradle ──────────────────────────────────────────────────────────
+# в”Ђв”Ђ app/build.gradle в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 gp = PROJECT / "android/app/build.gradle"
 g = gp.read_text()
 # minSdk
-g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 21", g)
+g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 24", g)
 g = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 21", g)
 g = re.sub(r"minSdk\s+flutter\.minSdkVersion", "minSdk 21", g)
-# compileSdk — set to 35 explicitly
+# compileSdk вЂ” set to 35 explicitly
 g = re.sub(r"compileSdkVersion\s+flutter\.compileSdkVersion", "compileSdkVersion 35", g)
 g = re.sub(r"compileSdk\s*=\s*flutter\.compileSdkVersion", "compileSdk = 35", g)
 g = re.sub(r"compileSdk\s+flutter\.compileSdkVersion", "compileSdk 35", g)
@@ -40,7 +40,7 @@ g = g.replace("jvmTarget = '1.8'", "jvmTarget = '11'")
 gp.write_text(g)
 print(f"app/build.gradle OK:\n{gp.read_text()}")
 
-# ── Patch ALL plugin build.gradle files (recursive) ───────────────────────────
+# в”Ђв”Ђ Patch ALL plugin build.gradle files (recursive) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 pub_cache = os.path.expanduser("~/.pub-cache/hosted/pub.dev")
 all_gradle = glob.glob(os.path.join(pub_cache, "**", "build.gradle"), recursive=True)
 print(f"\nFound {len(all_gradle)} build.gradle file(s) in pub-cache")
@@ -52,7 +52,7 @@ for f in all_gradle:
         continue
     original = content
     content = re.sub(r"flutter\.compileSdkVersion", "35", content)
-    content = re.sub(r"flutter\.minSdkVersion", "21", content)
+    content = re.sub(r"flutter\.minSdkVersion", "24", content)
     content = re.sub(r"flutter\.targetSdkVersion", "35", content)
     content = re.sub(r"flutter\.ndkVersion", '"27.0.12077973"', content)
     if content != original:
