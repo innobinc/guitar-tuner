@@ -1,11 +1,11 @@
-﻿import re
+import re
 import glob
 import pathlib
 import os
 
 PROJECT = pathlib.Path("/tmp/guitar_tuner")
 
-# в”Ђв”Ђ AndroidManifest в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# AndroidManifest
 manifest_path = PROJECT / "android/app/src/main/AndroidManifest.xml"
 manifest = manifest_path.read_text()
 if "RECORD_AUDIO" not in manifest:
@@ -16,18 +16,18 @@ if "RECORD_AUDIO" not in manifest:
     manifest_path.write_text(manifest)
 print("Manifest OK")
 
-# в”Ђв”Ђ app/build.gradle в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# app/build.gradle
 gp = PROJECT / "android/app/build.gradle"
 g = gp.read_text()
-# minSdk
+# minSdk -> 24 (flutter_sound 9.28 requires API 24+)
 g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 24", g)
-g = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 21", g)
-g = re.sub(r"minSdk\s+flutter\.minSdkVersion", "minSdk 21", g)
-# compileSdk вЂ” set to 35 explicitly
+g = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 24", g)
+g = re.sub(r"minSdk\s+flutter\.minSdkVersion", "minSdk 24", g)
+# compileSdk -> 35
 g = re.sub(r"compileSdkVersion\s+flutter\.compileSdkVersion", "compileSdkVersion 35", g)
 g = re.sub(r"compileSdk\s*=\s*flutter\.compileSdkVersion", "compileSdk = 35", g)
 g = re.sub(r"compileSdk\s+flutter\.compileSdkVersion", "compileSdk 35", g)
-# targetSdk
+# targetSdk -> 35
 g = re.sub(r"targetSdkVersion\s+flutter\.targetSdkVersion", "targetSdkVersion 35", g)
 g = re.sub(r"targetSdk\s*=\s*flutter\.targetSdkVersion", "targetSdk = 35", g)
 g = re.sub(r"targetSdk\s+flutter\.targetSdkVersion", "targetSdk 35", g)
@@ -40,7 +40,7 @@ g = g.replace("jvmTarget = '1.8'", "jvmTarget = '11'")
 gp.write_text(g)
 print(f"app/build.gradle OK:\n{gp.read_text()}")
 
-# в”Ђв”Ђ Patch ALL plugin build.gradle files (recursive) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# Patch ALL plugin build.gradle files (recursive)
 pub_cache = os.path.expanduser("~/.pub-cache/hosted/pub.dev")
 all_gradle = glob.glob(os.path.join(pub_cache, "**", "build.gradle"), recursive=True)
 print(f"\nFound {len(all_gradle)} build.gradle file(s) in pub-cache")
