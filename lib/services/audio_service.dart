@@ -35,19 +35,24 @@ class AudioService {
 
       _pcmController = StreamController<Uint8List>();
       _pcmSub = _pcmController!.stream.listen((bytes) {
-        // Signal level (RMS)
-        final samples = Int16List.view(bytes.buffer);
-        double sum = 0;
-        for (final s in samples) {
-          final n = s / 32768.0;
-          sum += n * n;
-        }
-        final rms = sqrt(sum / samples.length);
-        if (!_signalController.isClosed) _signalController.add(rms);
+        try {
+          // Signal level (RMS)
+          final samples = Int16List.sublistView(bytes);
+          double sum = 0;
+          for (final s in samples) {
+            final n = s / 32768.0;
+            sum += n * n;
+          }
+          final rms = samples.isEmpty ? 0.0 : sqrt(sum / samples.length);
+          if (!_signalController.isClosed) _signalController.add(rms);
 
-        // Pitch detection
-        final freq = _detector.feed(bytes);
-        if (!_pitchController.isClosed) _pitchController.add(freq);
+          // Pitch detection
+          final freq = _detector.feed(bytes);
+          if (!_pitchController.isClosed) _pitchController.add(freq);
+        } catch (e) {
+          _lastError = 'PCM decode error: $e';
+          if (!_signalController.isClosed) _signalController.add(-1);
+        }
       });
 
       await _recorder.startRecorder(
