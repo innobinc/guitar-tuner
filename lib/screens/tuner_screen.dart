@@ -21,6 +21,7 @@ class _TunerScreenState extends State<TunerScreen> {
   bool _listening = false;
   GuitarNote? _note;
   double _cents = 0;
+  double _smoothedCents = 0;
   double _signalLevel = 0;
   int? _selectedString;
 
@@ -72,10 +73,17 @@ class _TunerScreenState extends State<TunerScreen> {
         if (freq == null) return;
         final (note, cents) =
             GuitarNote.nearest(freq, restrictToString: _selectedString);
+        final clamped = cents.clamp(-50.0, 50.0);
         if (mounted) {
           setState(() {
+            // Snap (don't smooth) across note changes — e.g. switching strings
+            // — so the needle doesn't sweep across the whole dial; smooth
+            // within the same note to damp frame-to-frame detection jitter.
+            _smoothedCents = (_note?.name == note.name)
+                ? _smoothedCents * 0.7 + clamped * 0.3
+                : clamped;
             _note = note;
-            _cents = cents.clamp(-50.0, 50.0);
+            _cents = _smoothedCents;
           });
         }
       });

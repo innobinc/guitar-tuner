@@ -10,7 +10,8 @@ class TunerNeedle extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(end: cents.clamp(-50.0, 50.0)),
-      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 200),
       builder: (_, value, __) => CustomPaint(
         size: const Size(300, 160),
         painter: _NeedlePainter(value),
