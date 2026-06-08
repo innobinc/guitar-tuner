@@ -55,6 +55,16 @@ class _TunerScreenState extends State<TunerScreen> {
       }
 
       _signalSub = _audio.signalStream.listen((rms) {
+        if (rms < 0) {
+          // Native error
+          if (mounted) {
+            setState(() { _listening = false; _signalLevel = 0; });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(_audio.lastError ?? 'Audio error'), backgroundColor: Colors.red),
+            );
+          }
+          return;
+        }
         if (mounted) setState(() => _signalLevel = rms.clamp(0.0, 1.0));
       });
 

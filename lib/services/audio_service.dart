@@ -56,9 +56,9 @@ class AudioService {
           if (!_pitchController.isClosed) _pitchController.add(freq);
         },
         onError: (error) {
-          _lastError = error.toString();
+          _lastError = 'Native error: $error';
           _isRunning = false;
-          if (!_signalController.isClosed) _signalController.add(0.0);
+          if (!_signalController.isClosed) _signalController.add(-1.0); // -1 = error signal
         },
         cancelOnError: true,
       );
